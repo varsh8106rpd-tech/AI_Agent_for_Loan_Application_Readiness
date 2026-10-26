@@ -1,0 +1,16 @@
+{
+  "application_id": "SYN-001",
+  "applicant_name": "Alex Sample",
+  "employment_type": "Salaried",
+  "declared_monthly_income": 60000,
+  "record_monthly_income": 55000,
+  "monthly_expenses": 20000,
+  "monthly_debt_payments": 10000,
+  "requested_loan_amount": 300000,
+  "proposed_monthly_instalment": 5000,
+  "documents": {
+    "identity_information": true,
+    "income_proof": true,
+    "bank_financial_records": true
+  }
+}
