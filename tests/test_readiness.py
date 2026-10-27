@@ -1,4 +1,5 @@
 from agent.orchestrator import run_readiness_agent
+from tools.financial_calculator import calculate_financial_summary
 
 
 def sample():
@@ -80,3 +81,32 @@ def test_reviewer_questions_have_expected_type():
         for question in report["reviewer_questions"]
     )
 
+def test_negative_income_makes_application_incomplete():
+    application = sample()
+    application["declared_monthly_income"] = -1000
+
+    report = run_readiness_agent(application)
+
+    assert report["status"] == "Incomplete"
+    assert report["financial_summary"]["input_errors"]
+
+
+def test_missing_income_makes_application_incomplete():
+    application = sample()
+    application.pop("declared_monthly_income")
+
+    report = run_readiness_agent(application)
+
+    assert report["status"] == "Incomplete"
+    assert report["financial_summary"]["input_errors"]
+
+
+def test_zero_income_does_not_cause_division_by_zero():
+    application = sample()
+    application["declared_monthly_income"] = 0
+
+    summary = calculate_financial_summary(application)
+
+    assert summary["gross_monthly_income"] == 0
+    assert summary["debt_to_income_ratio_percent"] is None
+    assert summary["input_errors"] == []
