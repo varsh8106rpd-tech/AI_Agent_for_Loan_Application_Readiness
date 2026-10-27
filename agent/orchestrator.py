@@ -1,4 +1,6 @@
 
+import math
+
 from agent.llm_assistant import generate_reviewer_questions
 from tools.completeness import check_completeness
 from tools.financial_calculator import calculate_financial_summary
@@ -7,11 +9,14 @@ from tools.result_verifier import verify_financial_summary
 
 
 def valid_number(value):
-    """Return True if value is a non-negative numeric input."""
+    """Return True only for finite, non-negative numeric values."""
+    if isinstance(value, bool) or value is None:
+        return False
+
     try:
         number = float(value)
-        return number >= 0
-    except (TypeError, ValueError):
+        return math.isfinite(number) and number >= 0
+    except (TypeError, ValueError, OverflowError):
         return False
 
 
@@ -19,15 +24,15 @@ def run_readiness_agent(application: dict) -> dict:
     """
     Check application readiness using Python tools and a local LLM.
 
-    The LLM generates reviewer questions only. It does not control
-    financial calculations, verification, or readiness status.
+    Python controls all calculations, verification, and readiness.
+    The LLM can only generate reviewer questions.
     """
 
     trace = []
     findings = []
     questions = []
 
-    # 1. Check application completeness.
+    # 1. Check completeness.
     completeness = check_completeness(application)
 
     trace.append({
@@ -41,7 +46,6 @@ def run_readiness_agent(application: dict) -> dict:
 
     # 2. Calculate the financial summary.
     financial_summary = calculate_financial_summary(application)
-
     input_errors = financial_summary["input_errors"]
 
     trace.append({
@@ -93,7 +97,7 @@ def run_readiness_agent(application: dict) -> dict:
             "and supplied-record income."
         )
 
-    # 4. Verify the financial summary only when inputs are valid.
+    # 4. Independently verify calculations when inputs are valid.
     if not input_errors:
         verification = verify_financial_summary(
             application,
@@ -130,61 +134,72 @@ def run_readiness_agent(application: dict) -> dict:
             "relying on this report."
         )
 
-    # 5. Determine readiness using Python rules only.
+    # 5. Determine readiness exclusively through Python rules.
     if completeness["missing_items"] or input_errors:
         status = "Incomplete"
-
     elif consistency["issues"] or not verification["passed"]:
         status = "Needs clarification"
-
     else:
         status = "Ready for human review"
 
-    # 6. Ask the local LLM to improve reviewer questions.
-    # The LLM cannot modify findings, calculations, or status.
+    # Freeze the rule-based results before calling the LLM.
     existing_questions = list(dict.fromkeys(questions))
-    llm_questions = generate_reviewer_questions(
-        findings=findings,
-        existing_questions=existing_questions,
-    )
+    verified_findings = list(dict.fromkeys(findings))
 
-    # Keep rule-based questions if the LLM returns unusable output.
-    if (
-        not isinstance(llm_questions, list)
-        or not all(
-            isinstance(question, str)
-            for question in llm_questions
+    original_summary = dict(financial_summary)
+    original_verification = dict(verification)
+    original_status = status
+
+    # 6. Generate reviewer questions.
+    try:
+        llm_questions = generate_reviewer_questions(
+            findings=verified_findings,
+            existing_questions=existing_questions,
         )
-    ):
-        llm_questions = existing_questions
 
-    llm_questions = [
-        question.strip()
-        for question in llm_questions
-        if question.strip()
-    ]
+        if (
+            not isinstance(llm_questions, list)
+            or not all(
+                isinstance(question, str)
+                for question in llm_questions
+            )
+        ):
+            llm_questions = existing_questions
+        else:
+            llm_questions = [
+                question.strip()
+                for question in llm_questions
+                if question.strip() and len(question.strip()) <= 300
+            ]
 
-    if not llm_questions:
+            # Deduplicate and limit the displayed questions.
+            llm_questions = list(dict.fromkeys(llm_questions))[:3]
+
+            if not llm_questions:
+                llm_questions = existing_questions
+
+    except Exception:
+        # LLM failure must not prevent a readiness report.
         llm_questions = existing_questions
 
     trace.append({
         "step": len(trace) + 1,
         "tool": "generate_reviewer_questions",
         "result": (
-            "Local LLM generated reviewer questions."
+            "Reviewer questions generated or validated."
             if llm_questions != existing_questions
             else "Existing reviewer questions retained."
         ),
     })
 
-    # 7. Return the report.
+    # 7. Return the rule-based results, not an LLM decision.
     return {
         "application_id": application.get("application_id", ""),
-        "status": status,
-        "findings": list(dict.fromkeys(findings)),
+        "status": original_status,
+        "findings": verified_findings,
         "reviewer_questions": llm_questions,
-        "financial_summary": financial_summary,
-        "verification": verification,
+        "financial_summary": original_summary,
+        "verification": original_verification,
         "execution_trace": trace,
         "decision_boundary": (
             "Readiness only. No approval, rejection, "

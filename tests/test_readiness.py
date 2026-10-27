@@ -110,3 +110,22 @@ def test_zero_income_does_not_cause_division_by_zero():
     assert summary["gross_monthly_income"] == 0
     assert summary["debt_to_income_ratio_percent"] is None
     assert summary["input_errors"] == []
+
+def test_nan_income_is_rejected():
+    application = sample()
+    application["declared_monthly_income"] = float("nan")
+
+    report = run_readiness_agent(application)
+
+    assert report["status"] == "Incomplete"
+    assert report["financial_summary"]["input_errors"]
+
+
+def test_infinite_income_is_rejected():
+    application = sample()
+    application["declared_monthly_income"] = float("inf")
+
+    report = run_readiness_agent(application)
+
+    assert report["status"] == "Incomplete"
+    assert report["financial_summary"]["input_errors"]

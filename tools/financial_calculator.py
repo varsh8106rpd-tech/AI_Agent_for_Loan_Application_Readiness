@@ -1,12 +1,21 @@
+import math
 
 def _number(application: dict, field: str, label: str, errors: list) -> float:
-    """Read a non-negative numeric value and record validation errors."""
+    """Read a finite, non-negative numeric value."""
     value = application.get(field)
+
+    if isinstance(value, bool) or value is None:
+        errors.append(f"{label} is missing or invalid.")
+        return 0.0
 
     try:
         number = float(value)
-    except (TypeError, ValueError):
+    except (TypeError, ValueError, OverflowError):
         errors.append(f"{label} is missing or not numeric.")
+        return 0.0
+
+    if not math.isfinite(number):
+        errors.append(f"{label} must be a finite number.")
         return 0.0
 
     if number < 0:
