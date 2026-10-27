@@ -47,3 +47,36 @@ def test_financial_calculations_are_transparent():
     assert summary["disposable_income"] == 30000
     assert summary["debt_to_income_ratio_percent"] == 16.67
     assert summary["disposable_income_after_proposed_instalment"] == 25000
+
+
+def test_agent_never_makes_a_loan_approval_decision():
+    report = run_readiness_agent(sample())
+
+    assert report["status"] == "Ready for human review"
+    assert "No approval" in report["decision_boundary"]
+    assert "creditworthiness" in report["decision_boundary"]
+
+
+def test_execution_trace_includes_llm_question_step():
+    report = run_readiness_agent(sample())
+
+    tool_names = [
+        step["tool"] for step in report["execution_trace"]
+    ]
+
+    assert "check_completeness" in tool_names
+    assert "calculate_financial_summary" in tool_names
+    assert "check_consistency" in tool_names
+    assert "verify_financial_summary" in tool_names
+    assert "generate_reviewer_questions" in tool_names
+
+
+def test_reviewer_questions_have_expected_type():
+    report = run_readiness_agent(sample())
+
+    assert isinstance(report["reviewer_questions"], list)
+    assert all(
+        isinstance(question, str)
+        for question in report["reviewer_questions"]
+    )
+
