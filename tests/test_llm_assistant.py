@@ -70,7 +70,9 @@ def test_invalid_response_structure_uses_fallback(monkeypatch):
     assert result == existing
 
 
+
 def test_duplicate_questions_are_removed(monkeypatch):
+    import json
     import agent.llm_assistant as assistant
 
     def duplicate_chat(**kwargs):
@@ -78,9 +80,9 @@ def test_duplicate_questions_are_removed(monkeypatch):
             "message": {
                 "content": json.dumps({
                     "questions": [
-                        " Please provide income proof. ",
-                        "Please provide income proof.",
-                        "Please clarify the discrepancy.",
+                        "Could you clarify the income discrepancy?",
+                        "Could you clarify the income discrepancy?",
+                        "Could you confirm the recorded income?",
                     ]
                 })
             }
@@ -94,9 +96,10 @@ def test_duplicate_questions_are_removed(monkeypatch):
     )
 
     assert result == [
-        "Please provide income proof.",
-        "Please clarify the discrepancy.",
+        "Could you clarify the income discrepancy?",
+        "Could you confirm the recorded income?",
     ]
+
 
 
 def test_question_output_is_limited_to_three(monkeypatch):
